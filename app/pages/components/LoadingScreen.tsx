@@ -1,15 +1,28 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 const PROMPT = "~ $ ";
 const COMMAND = "getUser()";
 const RESULT_PREFIX = "=> ";
 const RESULT_NAME = "John Doe";
-const LETTER_DELAY_MS = 90;
+
+const INITIAL_BOOT_MS = 700;
 const PAUSE_AFTER_COMMAND_MS = 400;
 const PAUSE_AFTER_RESULT_MS = 800;
 const IGNITION_DURATION_MS = 900;
+
+const TYPING_FAST_MS = 85;
+
+function getTypingDelay(index: number): number {
+  if (index === 0) return 320;
+  if (index === 1) return 240;
+  if (index === 2) return 180;
+  if (index === 3) return 140;
+  if (index === 4) return 110;
+  return TYPING_FAST_MS;
+}
 
 export type IgnitionOrigin = {
   x: number;
@@ -48,9 +61,11 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
   useEffect(() => {
     if (phase === "typing-command") {
       if (commandLength < COMMAND.length) {
+        const delay =
+          commandLength === 0 ? INITIAL_BOOT_MS : getTypingDelay(commandLength);
         const t = setTimeout(
           () => setCommandLength((n) => n + 1),
-          LETTER_DELAY_MS
+          delay
         );
         return () => clearTimeout(t);
       }
@@ -69,9 +84,11 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
     if (phase === "typing-result") {
       const fullResult = RESULT_PREFIX + RESULT_NAME;
       if (resultLength < fullResult.length) {
+        const delay =
+          resultLength === 0 ? 220 : getTypingDelay(resultLength);
         const t = setTimeout(
           () => setResultLength((n) => n + 1),
-          LETTER_DELAY_MS
+          delay
         );
         return () => clearTimeout(t);
       }
@@ -109,7 +126,10 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
   const cursorVisible = showCursor && (phase === "typing-command" || phase === "enter");
 
   return (
-    <div
+    <motion.div
+      layout
+      ref={terminalRef}
+      transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
       className={`fixed inset-0 z-50 flex items-center justify-center bg-black transition-opacity duration-[900ms] ease-out ${
         isExiting ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
@@ -149,6 +169,6 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
