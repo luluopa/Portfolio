@@ -15,7 +15,8 @@ export function Navbar() {
       <motion.nav
         initial={{ y: -20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.2, duration: 0.8 }}
+        exit={{ y: -20, opacity: 0 }}
+        transition={{ duration: 0.8, ease: [0.23, 1, 0.32, 1] }}
         className="flex items-center gap-8 rounded-full border border-white/10 bg-black/20 px-8 py-3 backdrop-blur-xl"
       >
         <div className="mr-4 flex items-center gap-2">
