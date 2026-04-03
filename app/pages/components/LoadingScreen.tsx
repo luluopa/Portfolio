@@ -126,24 +126,21 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
   const cursorVisible = showCursor && (phase === "typing-command" || phase === "enter");
 
   return (
-    <motion.div
-      layout
-      ref={terminalRef}
-      transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
+    <div
       className={`fixed inset-0 z-50 flex items-center justify-center bg-black transition-opacity duration-[900ms] ease-out ${
         isExiting ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
     >
       <div className="w-full max-w-xl px-6 sm:px-8">
-        <div
+        <motion.div
           ref={terminalRef}
-          className="origin-center rounded-lg border border-white/10 bg-zinc-900/90 px-5 py-6 shadow-2xl backdrop-blur transition-all duration-[900ms] ease-out sm:px-6 sm:py-7"
+          initial={false}
+          animate={isExiting ? { scale: 2.5, opacity: 0 } : { scale: 1, opacity: 1 }}
+          transition={{ duration: 0.9, ease: [0.23, 1, 0.32, 1] }}
+          className="origin-center rounded-lg border border-white/10 bg-zinc-900/90 px-5 py-6 shadow-2xl backdrop-blur sm:px-6 sm:py-7"
           style={{
             boxShadow: "0 0 0 1px rgba(255,255,255,0.06), 0 25px 50px -12px rgba(0,0,0,0.5)",
-            ...(isExiting && {
-              transform: "scale(2.5)",
-              opacity: 0,
-            }),
+            willChange: "transform, opacity",
           }}
         >
           <div className="font-mono text-sm leading-relaxed sm:text-base">
@@ -167,8 +164,8 @@ export default function LoadingScreen({ onComplete }: LoadingScreenProps) {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
       </div>
-    </motion.div>
+    </div>
   );
 }
