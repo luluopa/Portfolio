@@ -37,15 +37,18 @@ const PROJECTS = [
   }
 ];
 
-export function Projects() {
+export function Projects({ energized }: { energized?: Set<number> }) {
+  // Indices for Projects section targets: 17, 18, 19, 20
+  const isTitleEnergized = energized?.has(17) || energized?.has(18);
+
   return (
     <section id="projects" className="relative px-6 py-32 sm:px-12">
       <div className="mx-auto max-w-7xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+          animate={isTitleEnergized ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.8 }}
+          style={{ willChange: "transform, opacity" }}
           className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"
         >
           <div className="flex flex-col gap-2">
@@ -62,15 +65,20 @@ export function Projects() {
         </motion.div>
 
         <div className="mt-24 grid grid-cols-1 gap-12 md:grid-cols-2">
-          {PROJECTS.map((project, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ delay: index * 0.1, duration: 0.8 }}
-              className="group relative flex flex-col"
-            >
+          {PROJECTS.map((project, index) => {
+            // Each project card can have its own energy trigger
+            const isProjectEnergized = energized?.has(17 + index) || isTitleEnergized;
+            
+            return (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={isProjectEnergized ? { opacity: 1, y: 0 } : {}}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 1, ease: "easeOut" }}
+                style={{ willChange: "transform, opacity" }}
+                className="group relative flex flex-col"
+              >
               {/* Project Image Placeholder */}
               <div className="relative aspect-video overflow-hidden rounded-2xl border border-white/5 bg-zinc-900 shadow-2xl transition-all group-hover:border-white/10 group-hover:shadow-[0_0_30px_rgba(255,255,255,0.02)]">
                 <div className="flex h-full w-full items-center justify-center bg-linear-to-br from-zinc-800 to-black">
@@ -117,8 +125,9 @@ export function Projects() {
               
               <a href={project.link} className="absolute inset-0 z-10" aria-label={`View project ${project.title}`} />
             </motion.div>
-          ))}
-        </div>
+          );
+        })}
+      </div>
       </div>
     </section>
   );

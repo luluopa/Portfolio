@@ -36,26 +36,37 @@ const PulseShader = {
     void main() {
       if (vUv.x > uProgress) discard;
 
-      // Use local position for clipping so it follows the pipe as it moves
+      // Distance-based clipping for the start point
       float dist = distance(vLocalPosition.xy, uOrigin.xy);
       if (dist < uClipRadius) discard;
 
-      // Soften the edge fade for better appearance
+      // Soften the edge fade
       float edgeFade = smoothstep(uClipRadius, uClipRadius + 0.1, dist);
-      float baseOpacity = 0.04 * edgeFade; // Much lower base opacity
+      float baseOpacity = 0.05 * edgeFade;
       
-      // Energy bursts moving along the line - slowed down and subtler
-      float pulse = fract(vUv.x * 2.0 - uTime * 1.0);
-      pulse = pow(pulse, 50.0);
+      // Energy bursts moving along the line - SLOWER
+      float pulse = fract(vUv.x * 2.0 - uTime * 0.5);
+      pulse = pow(pulse, 40.0) * 0.6;
       
-      float burst = fract(vUv.x * 1.0 - uTime * 0.7 + 0.5);
-      burst = pow(burst, 60.0) * 0.8;
+      // The "Spark" at the tip - SMOOTHER
+      float tipDist = abs(vUv.x - uProgress);
+      float spark = 1.0 - smoothstep(0.0, 0.03, tipDist);
+      spark = pow(spark, 3.0) * 1.2;
 
-      float finalPulse = max(pulse, burst) * edgeFade;
+      // Final energy pulse/burst logic - SLOWER
+      float burst = fract(vUv.x * 1.0 - uTime * 0.3 + 0.5);
+      burst = pow(burst, 60.0) * 0.5;
+
+      float finalEnergy = max(max(pulse, burst), spark) * edgeFade;
       
-      // Significantly reduced glow intensity
-      vec3 finalColor = uColor + (uPulseColor * finalPulse * 5.0);
-      float finalOpacity = baseOpacity + finalPulse * 0.4;
+      // Increase brightness near the tip (the "energy head")
+      vec3 finalColor = uColor + (uPulseColor * finalEnergy * 8.0);
+      
+      // Add a slight glow boost when progress is high (reaching target)
+      float reachBoost = smoothstep(0.95, 1.0, uProgress) * spark * 2.0;
+      finalColor += uPulseColor * reachBoost;
+
+      float finalOpacity = baseOpacity + finalEnergy * 0.6 + reachBoost;
 
       gl_FragColor = vec4(finalColor, finalOpacity);
     }
@@ -67,7 +78,7 @@ function PathfindingPipe({
   target, 
   index, 
   onReached,
-  startTime
+  startTime: globalStartTime
 }: { 
   origin: THREE.Vector3; 
   target: THREE.Vector3; 
@@ -77,103 +88,102 @@ function PathfindingPipe({
 }) {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const [hasReached, setHasReached] = useState(false);
+  const [iteration, setIteration] = useState(0);
+  const [localStartTime, setLocalStartTime] = useState(0);
+  const [isActivated, setIsActivated] = useState(false);
 
-  // Generate a multi-step "Manhattan Detour" path for a cleaner look
+  // ... (curve and geometry useMemo stay the same)
   const curve = useMemo(() => {
     const points = [origin.clone()];
-    
-    // Deterministic randomness based on index
-    const seed = index * 2.1;
+    const seed = (index * 7.7) + (iteration * 13.33);
     const rnd = (s: number) => (Math.sin(s) + 1) / 2;
-    
-    const isFromSide = Math.abs(origin.x) > 1.0; // Simple check if it's an edge origin
+    const isFromSide = Math.abs(origin.x) > 1.0; 
     
     if (isFromSide) {
-      // Step 1: Long horizontal entry from the side
-      // Move to a vertical "lane"
-      const laneX = THREE.MathUtils.lerp(origin.x, target.x, 0.3 + rnd(seed) * 0.2);
+      const laneX = THREE.MathUtils.lerp(origin.x, target.x, 0.2 + rnd(seed) * 0.3);
       points.push(new THREE.Vector3(laneX, origin.y, origin.z));
-      
-      // Step 2: Vertical travel
-      const midY = THREE.MathUtils.lerp(origin.y, target.y, 0.5);
-      points.push(new THREE.Vector3(laneX, midY, THREE.MathUtils.lerp(origin.z, target.z, 0.4)));
-      
-      // Step 3: Secondary horizontal
-      const secondX = THREE.MathUtils.lerp(laneX, target.x, 0.6);
-      points.push(new THREE.Vector3(secondX, midY, THREE.MathUtils.lerp(origin.z, target.z, 0.7)));
-      
-      // Step 4: Vertical alignment
-      points.push(new THREE.Vector3(secondX, target.y, THREE.MathUtils.lerp(origin.z, target.z, 0.9)));
-    } else {
-      // Original logic for central ignition pipes
-      const firstX = origin.x + (rnd(seed) - 0.5) * 1.5;
-      points.push(new THREE.Vector3(firstX, origin.y, origin.z));
-      
       const midY = THREE.MathUtils.lerp(origin.y, target.y, 0.4 + rnd(seed + 1) * 0.2);
-      const midX = firstX + (rnd(seed + 2) - 0.5) * 1.0;
+      points.push(new THREE.Vector3(laneX, midY, THREE.MathUtils.lerp(origin.z, target.z, 0.3)));
+      const secondX = THREE.MathUtils.lerp(laneX, target.x, 0.5 + rnd(seed + 2) * 0.3);
+      points.push(new THREE.Vector3(secondX, midY, THREE.MathUtils.lerp(origin.z, target.z, 0.6)));
+      points.push(new THREE.Vector3(secondX, target.y, THREE.MathUtils.lerp(origin.z, target.z, 0.8)));
+    } else {
+      const firstX = origin.x + (rnd(seed) - 0.5) * 2.0;
+      points.push(new THREE.Vector3(firstX, origin.y, origin.z));
+      const midY = THREE.MathUtils.lerp(origin.y, target.y, 0.3 + rnd(seed + 1) * 0.3);
+      const midX = firstX + (rnd(seed + 2) - 0.5) * 1.5;
       points.push(new THREE.Vector3(firstX, midY, origin.z));
       points.push(new THREE.Vector3(midX, midY, THREE.MathUtils.lerp(origin.z, target.z, 0.3)));
-      
-      const secondY = THREE.MathUtils.lerp(origin.y, target.y, 0.7 + rnd(seed + 3) * 0.15);
+      const secondY = THREE.MathUtils.lerp(origin.y, target.y, 0.6 + rnd(seed + 3) * 0.2);
       points.push(new THREE.Vector3(midX, secondY, THREE.MathUtils.lerp(origin.z, target.z, 0.6)));
       points.push(new THREE.Vector3(target.x, secondY, THREE.MathUtils.lerp(origin.z, target.z, 0.85)));
     }
     
     points.push(target.clone());
-
     const path = new THREE.CurvePath<THREE.Vector3>();
     for (let i = 0; i < points.length - 1; i++) {
       path.add(new THREE.LineCurve3(points[i], points[i+1]));
     }
     return path;
-  }, [origin, target, index]);
+  }, [origin, target, index, iteration]);
 
-  // Thinner lines for a much cleaner background look
-  const geometry = useMemo(() => new THREE.TubeGeometry(curve, 160, 0.0018, 6, false), [curve]);
+  const geometry = useMemo(() => {
+    const geo = new THREE.TubeGeometry(curve, 160, 0.0018, 6, false);
+    return geo;
+  }, [curve]);
 
-  // Stable uniforms object
+  useEffect(() => {
+    return () => geometry.dispose();
+  }, [geometry]);
+
   const uniforms = useMemo(() => {
     const u = THREE.UniformsUtils.clone(PulseShader.uniforms);
-    u.uColor.value = new THREE.Color("#18181b"); // Very dark zinc base
-    u.uPulseColor.value = new THREE.Color("#ffffff"); // Bright white pulse
-    
-    // Disable clipping for side-entry pipes so they emerge directly from the edge
+    u.uColor.value = new THREE.Color("#18181b"); 
+    u.uPulseColor.value = new THREE.Color("#ffffff"); 
     const isFromSide = Math.abs(origin.x) > 1.0;
-    if (isFromSide) {
-      u.uClipRadius.value = 0.0;
-    }
-    
-    return {
-      ...u,
-      uOrigin: { value: origin.clone() }
-    };
-  }, []); 
-
-  // Update origin if it changes
-  useEffect(() => {
-    if (uniforms.uOrigin) {
-      uniforms.uOrigin.value.copy(origin);
-      
-      const isFromSide = Math.abs(origin.x) > 1.0;
-      uniforms.uClipRadius.value = isFromSide ? 0.0 : PulseShader.uniforms.uClipRadius.value;
-    }
-  }, [origin, uniforms]);
+    u.uClipRadius.value = isFromSide ? 0.0 : 0.15;
+    return { ...u, uOrigin: { value: origin.clone() } };
+  }, [origin]); 
 
   useFrame((state) => {
-    if (startTime > 0) {
-      // Update values on the stable uniforms object
-      uniforms.uTime.value = state.clock.elapsedTime;
+    if (globalStartTime > 0) {
+      // Check for proximity activation
+      if (!isActivated) {
+        // Camera Y position is -scrollRatio * viewport.height
+        // If the target is within a certain distance from the current camera view, activate it
+        const camY = state.camera.position.y;
+        const distToCam = Math.abs(target.y - camY);
+        
+        // Activate if it's in the Hero area OR if we scrolled near it
+        if (index < 10 || distToCam < 5) {
+          setIsActivated(true);
+          setLocalStartTime(state.clock.elapsedTime);
+        }
+        return;
+      }
+
+      const effectiveStartTime = iteration === 0 ? localStartTime : localStartTime;
+      const timeSinceStart = state.clock.elapsedTime - effectiveStartTime;
       
-      const timeSinceStart = state.clock.elapsedTime - startTime;
-      const pipeDelay = index * 0.12; 
+      // Small sequential delay for groups, but much faster than before
+      const pipeDelay = iteration === 0 ? (index % 4) * 0.2 : 0.1; 
       const growthTime = timeSinceStart - pipeDelay;
       
-      const progress = Math.min(Math.max(growthTime * 2.0, 0), 1);
+      const progress = Math.min(Math.max(growthTime * 0.8, 0), 1);
       uniforms.uProgress.value = progress;
+      uniforms.uTime.value = state.clock.elapsedTime;
 
       if (progress >= 1 && !hasReached) {
         setHasReached(true);
         onReached(index);
+      }
+
+      // Loop after some time
+      if (progress >= 1 && growthTime > 8.0) {
+        setIteration(i => i + 1);
+        setLocalStartTime(state.clock.elapsedTime);
+        setHasReached(false);
+        uniforms.uProgress.value = 0;
       }
     }
   });
@@ -228,25 +238,33 @@ export function PipeSystem({
 
   const worldData = useMemo(() => {
     return targets.map((t, i) => {
+      const depth = t.z ?? -1;
+      
+      // Calculate the visible area at the specific depth of this target
+      // Camera is at z=5, so distance to depth is 5 - (depth)
+      const distance = 5 - depth;
+      const vAtDepth = 2 * Math.tan(THREE.MathUtils.degToRad(50) / 2) * distance;
+      const wAtDepth = vAtDepth * (viewport.width / viewport.height);
+
       const targetVec = new THREE.Vector3(
-        (t.x * viewport.width) / 2,
-        (t.y * viewport.height) / 2,
-        t.z ?? -1
+        (t.x * wAtDepth) / 2,
+        (t.y * vAtDepth) / 2,
+        depth
       );
 
       let originVec: THREE.Vector3;
 
-      // First 6 targets stay with the central ignition origin (the name)
+      // First 6 targets emerge from a wider area or the extreme left
       if (i < 6) {
-        originVec = new THREE.Vector3(-viewport.width * 0.28, 0, 0);
+        // Spread the origin further out to the left, beyond the viewport
+        originVec = new THREE.Vector3(-wAtDepth * 0.6, 0, depth);
       } else {
-        // Others emerge from the sides of the viewport
-        const side = i % 2 === 0 ? 1 : -1; // Alternate left/right
-        const edgeX = (side * viewport.width) / 2;
+        // Others emerge from the extreme sides of the viewport at their own depth
+        const side = i % 2 === 0 ? 1 : -1;
+        const edgeX = (side * wAtDepth) / 2 * 1.2; // 20% beyond the edge
         
-        // Start slightly higher or lower than the target to create a diagonal entry
-        const edgeY = targetVec.y + (i % 3 - 1) * 2.0; 
-        originVec = new THREE.Vector3(edgeX, edgeY, t.z ?? -2);
+        const edgeY = targetVec.y + (i % 3 - 1) * 3.0; 
+        originVec = new THREE.Vector3(edgeX, edgeY, depth);
       }
 
       return { origin: originVec, target: targetVec };

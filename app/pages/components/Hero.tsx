@@ -11,11 +11,12 @@ export type HeroProps = {
 };
 
 export function Hero({ energized, targets }: HeroProps) {
-  // Helper to check if a group of targets is energized
-  // Indices: 0-3 (Navbar), 4-5 (Text/CTA), 6-7 (Image)
-  const isNavbarEnergized = targets.slice(0, 4).some((_, i) => energized.has(i));
-  const isContentEnergized = targets.slice(4, 6).some((_, i) => energized.has(i + 4));
-  const isImageEnergized = targets.slice(6, 8).some((_, i) => energized.has(i + 6));
+  // Updated helpers for energized targets based on new indexing:
+  // 0-1 (Title), 2-3 (Description/CTA), 4-7 (Navbar), 8-9 (Image)
+  const isTitleEnergized = energized.has(0) || energized.has(1);
+  const isContentEnergized = energized.has(2) || energized.has(3);
+  const isNavbarEnergized = [4, 5, 6, 7].some(id => energized.has(id));
+  const isImageEnergized = energized.has(8) || energized.has(9);
 
   return (
     <section id="about" className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 pt-24 sm:px-12">
@@ -28,21 +29,21 @@ export function Hero({ energized, targets }: HeroProps) {
       <div className="relative z-10 grid w-full max-w-7xl grid-cols-1 items-center gap-12 lg:grid-cols-2">
         {/* Left Side: Identity & CTA */}
         <div className="flex flex-col items-center lg:items-start">
-          {/* The Name: Origin point, always visible but with initial energy flash */}
+          {/* The Name: Now dependent on energy */}
           <motion.h1
-            initial={{ opacity: 0, x: -20, filter: "brightness(1)" }}
-            animate={{ 
+            initial={{ opacity: 0, x: -20, filter: "brightness(1) blur(10px)" }}
+            animate={isTitleEnergized ? { 
               opacity: 1, 
               x: 0, 
-              filter: ["brightness(1)", "brightness(2.5)", "brightness(1)"],
-              scale: [1, 1.02, 1]
-            }}
+              filter: "brightness(1) blur(0px)",
+              scale: [1, 1.02, 1],
+            } : {}}
             transition={{ 
-              duration: 1.2, 
+              duration: 1.5,
               ease: [0.23, 1, 0.32, 1],
-              filter: { duration: 0.6, delay: 0.1 },
               scale: { duration: 2, repeat: Infinity, repeatType: "reverse" }
             }}
+            style={{ willChange: "transform, opacity, filter" }}
             className="text-center font-sans text-7xl font-bold tracking-tight text-white sm:text-8xl lg:text-left"
           >
             John Doe
@@ -51,8 +52,12 @@ export function Hero({ energized, targets }: HeroProps) {
           {/* Subtext and Description: Appear when content targets are energized */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
-            animate={isContentEnergized ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.8 }}
+            animate={isContentEnergized ? { 
+              opacity: 1, 
+              y: 0,
+            } : {}}
+            transition={{ duration: 1.2, ease: "easeOut" }}
+            style={{ willChange: "transform, opacity" }}
             className="mt-6 flex flex-col items-center gap-4 sm:flex-row lg:items-start"
           >
             <span className="font-mono text-sm tracking-widest text-zinc-400 uppercase">

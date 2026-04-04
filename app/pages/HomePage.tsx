@@ -38,18 +38,26 @@ export default function HomePage() {
 
   // Define UI targets globally so PipeSystem can reach them across sections
   const targets = useMemo(() => [
-    // Navbar targets (top row)
+    // 0-1: Hero Title & Core area (First to ignite)
+    { x: -0.55, y: -0.1 },
+    { x: -0.45, y: -0.05 },
+    // 2-3: Hero Description / CTA
+    { x: -0.6, y: -0.3 },
+    { x: -0.5, y: -0.4 },
+    // 4-7: Navbar targets (top row)
     { x: -0.4, y: 0.8 },
     { x: -0.15, y: 0.8 },
     { x: 0.15, y: 0.8 },
     { x: 0.4, y: 0.8 },
-    // Hero Description area
-    { x: -0.5, y: -0.3 },
-    { x: -0.6, y: -0.1 },
-    // Hero Image area
+    // 8-9: Hero Image area
     { x: 0.5, y: -0.1 },
     { x: 0.55, y: 0.1 },
-    // Random deep nodes for depth
+    // Extreme edge nodes for "boundless" feel
+    { x: -0.95, y: 0.2, z: -2 },
+    { x: 0.95, y: -0.4, z: -2 },
+    { x: -0.9, y: -0.8, z: -5 },
+    { x: 0.9, y: 0.5, z: -5 },
+    // ... rest of the nodes
     { x: -0.8, y: -0.6, z: -4 },
     { x: 0.8, y: -0.6, z: -4 },
     { x: 0, y: -0.5, z: -3 },
@@ -93,8 +101,8 @@ export default function HomePage() {
           energized={energized} 
           targets={targets} 
         />
-        <Projects />
-        <Experience />
+        <Projects energized={energized} />
+        <Experience energized={energized} />
       </div>
     </main>
   );

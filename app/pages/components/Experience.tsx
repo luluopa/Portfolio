@@ -26,15 +26,18 @@ const EXPERIENCES = [
   }
 ];
 
-export function Experience() {
+export function Experience({ energized }: { energized?: Set<number> }) {
+  // Indices for Experience section targets: 21, 22, 23, 24
+  const isSectionEnergized = energized?.has(21) || energized?.has(22);
+
   return (
     <section id="experience" className="relative px-6 py-32 sm:px-12">
       <div className="mx-auto max-w-7xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+          animate={isSectionEnergized ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.8 }}
+          style={{ willChange: "transform, opacity" }}
           className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"
         >
           <div className="flex flex-col gap-2">
@@ -51,15 +54,19 @@ export function Experience() {
         </motion.div>
 
         <div className="mt-24 space-y-12">
-          {EXPERIENCES.map((exp, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-100px" }}
-              transition={{ delay: index * 0.1, duration: 0.8 }}
-              className="group relative grid grid-cols-1 gap-8 rounded-2xl border border-white/5 bg-zinc-900/40 p-8 transition-all hover:border-white/10 hover:bg-zinc-900/60 lg:grid-cols-4 lg:p-12"
-            >
+          {EXPERIENCES.map((exp, index) => {
+            const isExpEnergized = energized?.has(21 + index) || isSectionEnergized;
+            
+            return (
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={isExpEnergized ? { opacity: 1, y: 0 } : {}}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 1, ease: "easeOut" }}
+                style={{ willChange: "transform, opacity" }}
+                className="group relative grid grid-cols-1 gap-8 rounded-2xl border border-white/5 bg-zinc-900/40 p-8 transition-all hover:border-white/10 hover:bg-zinc-900/60 lg:grid-cols-4 lg:p-12"
+              >
               {/* Period */}
               <div className="lg:col-span-1">
                 <span className="font-mono text-sm tracking-wider text-zinc-500 uppercase">
@@ -92,8 +99,9 @@ export function Experience() {
                 ))}
               </div>
             </motion.div>
-          ))}
-        </div>
+          );
+        })}
+      </div>
       </div>
 
       {/* Subtle background detail */}
