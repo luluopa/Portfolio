@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useMemo, useState, useEffect } from "react";
+import { useRef, useMemo, useState, useEffect, memo } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import { type LoadingCompletePayload } from "./LoadingScreen";
 
 // Shader optimized for thin energy lines
 const PulseShader = {
@@ -73,31 +74,39 @@ const PulseShader = {
   `,
 };
 
-function PathfindingPipe({ 
+const PathfindingPipe = memo(function PathfindingPipe({ 
   origin, 
   target, 
-  index, 
+  id, 
   onReached,
   startTime: globalStartTime
 }: { 
   origin: THREE.Vector3; 
   target: THREE.Vector3; 
-  index: number;
-  onReached: (index: number) => void;
+  id: string;
+  onReached: (id: string) => void;
   startTime: number;
 }) {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
-  const [hasReached, setHasReached] = useState(false);
+  const stateRef = useRef({
+    isActivated: false,
+    hasReached: false,
+    localStartTime: 0,
+    lastIteration: 0
+  });
+  
   const [iteration, setIteration] = useState(0);
-  const [localStartTime, setLocalStartTime] = useState(0);
-  const [isActivated, setIsActivated] = useState(false);
 
-  // ... (curve and geometry useMemo stay the same)
+  const idHash = useMemo(() => id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0), [id]);
+
   const curve = useMemo(() => {
-    const points = [origin.clone()];
-    const seed = (index * 7.7) + (iteration * 13.33);
+    // Only rebuild if coordinates or iteration change
+    const startPoint = new THREE.Vector3(origin.x, origin.y, origin.z);
+    const endPoint = new THREE.Vector3(target.x, target.y, target.z);
+    const points = [startPoint];
+    const seed = (idHash * 7.7) + (iteration * 13.33);
     const rnd = (s: number) => (Math.sin(s) + 1) / 2;
-    const isFromSide = Math.abs(origin.x) > 1.0; 
+    const isFromSide = Math.abs(origin.x) > 2.0; 
     
     if (isFromSide) {
       const laneX = THREE.MathUtils.lerp(origin.x, target.x, 0.2 + rnd(seed) * 0.3);
@@ -119,77 +128,89 @@ function PathfindingPipe({
       points.push(new THREE.Vector3(target.x, secondY, THREE.MathUtils.lerp(origin.z, target.z, 0.85)));
     }
     
-    points.push(target.clone());
+    points.push(endPoint);
     const path = new THREE.CurvePath<THREE.Vector3>();
     for (let i = 0; i < points.length - 1; i++) {
       path.add(new THREE.LineCurve3(points[i], points[i+1]));
     }
     return path;
-  }, [origin, target, index, iteration]);
+  }, [origin.x, origin.y, origin.z, target.x, target.y, target.z, idHash, iteration]);
 
   const geometry = useMemo(() => {
-    const geo = new THREE.TubeGeometry(curve, 160, 0.0018, 6, false);
+    // Reduced segments (160 -> 64) for performance during scroll
+    const geo = new THREE.TubeGeometry(curve, 64, 0.0018, 6, false);
     return geo;
   }, [curve]);
 
   useEffect(() => {
-    return () => geometry.dispose();
+    return () => {
+      if (geometry) geometry.dispose();
+    };
   }, [geometry]);
 
   const uniforms = useMemo(() => {
     const u = THREE.UniformsUtils.clone(PulseShader.uniforms);
     u.uColor.value = new THREE.Color("#18181b"); 
     u.uPulseColor.value = new THREE.Color("#ffffff"); 
-    const isFromSide = Math.abs(origin.x) > 1.0;
-    u.uClipRadius.value = isFromSide ? 0.0 : 0.15;
+    const isFromCenter = Math.abs(origin.x) < 2.0;
+    u.uClipRadius.value = isFromCenter ? 0.25 : 0.0;
     return { ...u, uOrigin: { value: origin.clone() } };
-  }, [origin]); 
+  }, [origin.x, origin.y, origin.z]); 
 
   useFrame((state) => {
+    // Always update time for shader effects
+    uniforms.uTime.value = state.clock.elapsedTime;
+
     if (globalStartTime > 0) {
-      // Check for proximity activation
-      if (!isActivated) {
-        // Camera Y position is -scrollRatio * viewport.height
-        // If the target is within a certain distance from the current camera view, activate it
-        const camY = state.camera.position.y;
-        const distToCam = Math.abs(target.y - camY);
+      const camY = state.camera.position.y;
+      const distToCam = Math.abs(target.y - camY);
+      const isBackground = id.startsWith("bg-");
+      
+      // Proximity activation - Background pipes activate much earlier or instantly
+      if (!stateRef.current.isActivated) {
+        const activationRange = isBackground ? 100 : 12; // 100 is almost global
         
-        // Activate if it's in the Hero area OR if we scrolled near it
-        if (index < 10 || distToCam < 5) {
-          setIsActivated(true);
-          setLocalStartTime(state.clock.elapsedTime);
+        if (isBackground || id.startsWith("hero") || id.startsWith("nav") || distToCam < activationRange) {
+          stateRef.current.isActivated = true;
+          stateRef.current.localStartTime = state.clock.elapsedTime;
         }
         return;
       }
 
-      const effectiveStartTime = iteration === 0 ? localStartTime : localStartTime;
-      const timeSinceStart = state.clock.elapsedTime - effectiveStartTime;
-      
-      // Small sequential delay for groups, but much faster than before
-      const pipeDelay = iteration === 0 ? (index % 4) * 0.2 : 0.1; 
+      const timeSinceStart = state.clock.elapsedTime - stateRef.current.localStartTime;
+      const pipeDelay = iteration === 0 ? (idHash % 4) * 0.2 : 0.1; 
       const growthTime = timeSinceStart - pipeDelay;
       
       const progress = Math.min(Math.max(growthTime * 0.8, 0), 1);
       uniforms.uProgress.value = progress;
-      uniforms.uTime.value = state.clock.elapsedTime;
 
-      if (progress >= 1 && !hasReached) {
-        setHasReached(true);
-        onReached(index);
+      if (progress >= 1 && !stateRef.current.hasReached) {
+        stateRef.current.hasReached = true;
+        onReached(id);
       }
 
-      // Loop after some time
-      if (progress >= 1 && growthTime > 8.0) {
-        setIteration(i => i + 1);
-        setLocalStartTime(state.clock.elapsedTime);
-        setHasReached(false);
-        uniforms.uProgress.value = 0;
+      // Reset logic for all pipes to keep background dynamic
+      const isPersistent = id.startsWith("hero") || id.startsWith("nav");
+      const idHashVal = idHash; 
+      
+      // Background pipes reset very fast (1-3s) to maintain a diffuse background flow
+      const resetThreshold = isBackground 
+        ? 1.0 + (idHashVal % 2) 
+        : isPersistent 
+          ? 15.0 + (idHashVal % 10) 
+          : 8.0 + (idHashVal % 5);
+      
+      if (progress >= 1 && growthTime > resetThreshold) {
+        stateRef.current.lastIteration += 1;
+        stateRef.current.localStartTime = state.clock.elapsedTime;
+        stateRef.current.hasReached = false;
+        setIteration(stateRef.current.lastIteration);
       }
     }
   });
 
   return (
-    <mesh geometry={geometry}>
+    <mesh geometry={geometry} frustumCulled={false}>
       <shaderMaterial
         ref={materialRef}
         uniforms={uniforms}
@@ -201,9 +222,10 @@ function PathfindingPipe({
       />
     </mesh>
   );
-}
+});
 
 export type PipeTarget = {
+  id: string;
   x: number;
   y: number;
   z?: number;
@@ -214,12 +236,18 @@ export function PipeSystem({
   targets, 
   onTargetReached 
 }: { 
-  ignition: any;
+  ignition: LoadingCompletePayload | null;
   targets: PipeTarget[]; 
-  onTargetReached: (index: number) => void;
+  onTargetReached: (id: string) => void;
 }) {
   const { viewport } = useThree();
   const [startTime, setStartTime] = useState<number>(0);
+
+  // Stabilize viewport dimensions to avoid excessive re-calculations during scroll
+  const stableViewport = useMemo(() => ({
+    width: Math.round(viewport.width * 100) / 100,
+    height: Math.round(viewport.height * 100) / 100,
+  }), [viewport.width, viewport.height]);
 
   useFrame((state) => {
     // Start timing
@@ -228,23 +256,25 @@ export function PipeSystem({
     }
 
     // Scroll handling: Move the CAMERA instead of the group
-    // This provides natural parallax for deep objects and 1:1 scroll for front objects
     const scrollY = typeof window !== "undefined" ? window.scrollY : 0;
-    const scrollRatio = scrollY / (typeof window !== "undefined" ? window.innerHeight : 1);
+    const windowH = typeof window !== "undefined" ? window.innerHeight : 1;
+    const scrollRatio = scrollY / (windowH || 1);
     
     // Map scroll pixels to camera Y (scrolling down = camera moves down)
-    state.camera.position.y = -scrollRatio * viewport.height;
+    // FIX: Multiply scrollRatio by stableViewport.height * 1.0 to match HTML height 1:1
+    const targetCamY = -scrollRatio * stableViewport.height;
+    if (!isNaN(targetCamY) && isFinite(targetCamY)) {
+      state.camera.position.y = targetCamY; // Set directly to avoid lag/mismatch
+    }
   });
 
   const worldData = useMemo(() => {
     return targets.map((t, i) => {
       const depth = t.z ?? -1;
       
-      // Calculate the visible area at the specific depth of this target
-      // Camera is at z=5, so distance to depth is 5 - (depth)
       const distance = 5 - depth;
       const vAtDepth = 2 * Math.tan(THREE.MathUtils.degToRad(50) / 2) * distance;
-      const wAtDepth = vAtDepth * (viewport.width / viewport.height);
+      const wAtDepth = vAtDepth * (stableViewport.width / (stableViewport.height || 1));
 
       const targetVec = new THREE.Vector3(
         (t.x * wAtDepth) / 2,
@@ -254,22 +284,34 @@ export function PipeSystem({
 
       let originVec: THREE.Vector3;
 
-      // First 6 targets emerge from a wider area or the extreme left
-      if (i < 6) {
-        // Spread the origin further out to the left, beyond the viewport
+      if (ignition?.origin && (t.id.startsWith("hero") || t.id.startsWith("nav"))) {
+        const windowW = typeof window !== "undefined" ? window.innerWidth : 1;
+        const windowH = typeof window !== "undefined" ? window.innerHeight : 1;
+        const ndcX = (ignition.origin.x / (windowW || 1)) * 2 - 1;
+        const ndcY = -(ignition.origin.y / (windowH || 1)) * 2 + 1;
+        
+        originVec = new THREE.Vector3(
+          (ndcX * wAtDepth) / 2,
+          (ndcY * vAtDepth) / 2,
+          depth
+        );
+      } else if (t.id.startsWith("hero") || t.id.startsWith("nav")) {
         originVec = new THREE.Vector3(-wAtDepth * 0.6, 0, depth);
       } else {
-        // Others emerge from the extreme sides of the viewport at their own depth
+        // Background pipes: random trajectory across the screen area
         const side = i % 2 === 0 ? 1 : -1;
-        const edgeX = (side * wAtDepth) / 2 * 1.2; // 20% beyond the edge
-        
-        const edgeY = targetVec.y + (i % 3 - 1) * 3.0; 
+        // Start from one side, go to a point on the other side or middle
+        const edgeX = (side * wAtDepth) / 2 * 1.5; 
+        const edgeY = targetVec.y + (Math.sin(i * 1.5) * 5.0); // More variation in start Y
         originVec = new THREE.Vector3(edgeX, edgeY, depth);
+        
+        // Randomize target X more for background to make them "cross" the page
+        targetVec.x = -edgeX * 0.8; 
       }
 
       return { origin: originVec, target: targetVec };
     });
-  }, [targets, viewport.width, viewport.height]);
+  }, [targets, stableViewport.width, stableViewport.height, ignition]);
 
   if (!ignition) return null;
 
@@ -277,8 +319,8 @@ export function PipeSystem({
     <group>
       {worldData.map((data, i) => (
         <PathfindingPipe 
-          key={i} 
-          index={i} 
+          key={targets[i].id} 
+          id={targets[i].id} 
           origin={data.origin} 
           target={data.target} 
           onReached={onTargetReached}

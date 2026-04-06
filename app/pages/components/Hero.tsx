@@ -6,17 +6,16 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export type HeroProps = {
   ignition?: LoadingCompletePayload | null;
-  energized: Set<number>;
-  targets: Array<{ x: number, y: number, z?: number }>;
+  energized: Set<string>;
+  targets: Array<{ id: string, x: number, y: number, z?: number }>;
 };
 
 export function Hero({ energized, targets }: HeroProps) {
-  // Updated helpers for energized targets based on new indexing:
-  // 0-1 (Title), 2-3 (Description/CTA), 4-7 (Navbar), 8-9 (Image)
-  const isTitleEnergized = energized.has(0) || energized.has(1);
-  const isContentEnergized = energized.has(2) || energized.has(3);
-  const isNavbarEnergized = [4, 5, 6, 7].some(id => energized.has(id));
-  const isImageEnergized = energized.has(8) || energized.has(9);
+  // Updated helpers for energized targets based on new IDs:
+  const isTitleEnergized = energized.has("hero-title-1") || energized.has("hero-title-2");
+  const isContentEnergized = energized.has("hero-desc-1") || energized.has("hero-desc-2");
+  const isNavbarEnergized = ["nav-1", "nav-2", "nav-3", "nav-4"].some(id => energized.has(id));
+  const isImageEnergized = energized.has("hero-image-1") || energized.has("hero-image-2");
 
   return (
     <section id="about" className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 pt-24 sm:px-12">

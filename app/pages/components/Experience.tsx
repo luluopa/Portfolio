@@ -1,6 +1,9 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+
+const ITEMS_PER_PAGE = 2;
 
 const EXPERIENCES = [
   {
@@ -26,82 +29,123 @@ const EXPERIENCES = [
   }
 ];
 
-export function Experience({ energized }: { energized?: Set<number> }) {
-  // Indices for Experience section targets: 21, 22, 23, 24
-  const isSectionEnergized = energized?.has(21) || energized?.has(22);
+export function Experience({ energized }: { energized?: Set<string> }) {
+  const [currentPage, setCurrentPage] = useState(0);
+  
+  // IDs for Experience section targets: exp-title-1, exp-title-2, exp-1, exp-2
+  const isSectionEnergized = energized?.has("exp-title-1") || energized?.has("exp-title-2");
+
+  const totalPages = Math.ceil(EXPERIENCES.length / ITEMS_PER_PAGE);
+  const currentExperiences = EXPERIENCES.slice(
+    currentPage * ITEMS_PER_PAGE,
+    (currentPage + 1) * ITEMS_PER_PAGE
+  );
 
   return (
     <section id="experience" className="relative px-6 py-32 sm:px-12">
       <div className="mx-auto max-w-7xl">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={isSectionEnergized ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.8 }}
-          style={{ willChange: "transform, opacity" }}
-          className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"
-        >
-          <div className="flex flex-col gap-2">
-            <span className="font-mono text-xs tracking-[0.3em] text-zinc-500 uppercase">
-              Career Timeline
+        <div className="flex flex-col gap-12">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={isSectionEnergized ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.8 }}
+            style={{ willChange: "transform, opacity" }}
+            className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"
+          >
+            <div className="flex flex-col gap-2">
+              <span className="font-mono text-xs tracking-[0.3em] text-zinc-500 uppercase">
+                Career Timeline
+              </span>
+              <h2 className="font-sans text-5xl font-bold tracking-tight text-white sm:text-6xl">
+                Professional Experience
+              </h2>
+            </div>
+            <p className="max-w-md text-lg text-zinc-400">
+              A track record of building robust systems and solving complex architectural challenges.
+            </p>
+          </motion.div>
+
+          {/* Pagination Controls */}
+          <div className="flex items-center gap-4">
+            <div className="flex gap-1">
+              {Array.from({ length: totalPages }).map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentPage(i)}
+                  className={`h-1 transition-all duration-300 ${
+                    currentPage === i ? "w-8 bg-white" : "w-4 bg-white/20 hover:bg-white/40"
+                  }`}
+                  aria-label={`Go to page ${i + 1}`}
+                />
+              ))}
+            </div>
+            <span className="font-mono text-[10px] tracking-widest text-zinc-500 uppercase">
+              {String(currentPage + 1).padStart(2, '0')} / {String(totalPages).padStart(2, '0')}
             </span>
-            <h2 className="font-sans text-5xl font-bold tracking-tight text-white sm:text-6xl">
-              Professional Experience
-            </h2>
           </div>
-          <p className="max-w-md text-lg text-zinc-400">
-            A track record of building robust systems and solving complex architectural challenges.
-          </p>
-        </motion.div>
+        </div>
 
-        <div className="mt-24 space-y-12">
-          {EXPERIENCES.map((exp, index) => {
-            const isExpEnergized = energized?.has(21 + index) || isSectionEnergized;
-            
-            return (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={isExpEnergized ? { opacity: 1, y: 0 } : {}}
-                viewport={{ once: true, margin: "-50px" }}
-                transition={{ duration: 1, ease: "easeOut" }}
-                style={{ willChange: "transform, opacity" }}
-                className="group relative grid grid-cols-1 gap-8 rounded-2xl border border-white/5 bg-zinc-900/40 p-8 transition-all hover:border-white/10 hover:bg-zinc-900/60 lg:grid-cols-4 lg:p-12"
-              >
-              {/* Period */}
-              <div className="lg:col-span-1">
-                <span className="font-mono text-sm tracking-wider text-zinc-500 uppercase">
-                  {exp.period}
-                </span>
-              </div>
-
-              {/* Core Content */}
-              <div className="lg:col-span-2">
-                <h3 className="text-2xl font-bold text-white transition-colors group-hover:text-zinc-100">
-                  {exp.role}
-                </h3>
-                <p className="mt-2 font-mono text-sm tracking-widest text-zinc-400 uppercase">
-                  {exp.company}
-                </p>
-                <p className="mt-6 text-lg leading-relaxed text-zinc-400">
-                  {exp.description}
-                </p>
-              </div>
-
-              {/* Skills Tags */}
-              <div className="flex flex-wrap items-start gap-2 lg:col-span-1 lg:justify-end">
-                {exp.skills.map((skill) => (
-                  <span
-                    key={skill}
-                    className="rounded-full border border-white/10 px-3 py-1 font-mono text-[10px] tracking-widest text-zinc-500 uppercase transition-colors hover:border-white/20 hover:text-zinc-300"
+        <div className="mt-12">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentPage}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
+              className="space-y-12"
+            >
+              {currentExperiences.map((exp, index) => {
+                const globalIndex = currentPage * ITEMS_PER_PAGE + index;
+                const expId = `exp-${globalIndex + 1}`;
+                const isExpEnergized = energized?.has(expId) || isSectionEnergized;
+                
+                return (
+                  <motion.div
+                    key={globalIndex}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={isExpEnergized ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.8, delay: index * 0.1 }}
+                    style={{ willChange: "transform, opacity" }}
+                    className="group relative grid grid-cols-1 gap-8 rounded-2xl border border-white/5 bg-zinc-900/40 p-8 transition-all hover:border-white/10 hover:bg-zinc-900/60 lg:grid-cols-4 lg:p-12"
                   >
-                    {skill}
-                  </span>
-                ))}
-              </div>
+                    {/* Period */}
+                    <div className="lg:col-span-1">
+                      <span className="font-mono text-sm tracking-wider text-zinc-500 uppercase">
+                        {exp.period}
+                      </span>
+                    </div>
+
+                    {/* Core Content */}
+                    <div className="lg:col-span-2">
+                      <h3 className="text-2xl font-bold text-white transition-colors group-hover:text-zinc-100">
+                        {exp.role}
+                      </h3>
+                      <p className="mt-2 font-mono text-sm tracking-widest text-zinc-400 uppercase">
+                        {exp.company}
+                      </p>
+                      <p className="mt-6 text-lg leading-relaxed text-zinc-400">
+                        {exp.description}
+                      </p>
+                    </div>
+
+                    {/* Skills Tags */}
+                    <div className="flex flex-wrap items-start gap-2 lg:col-span-1 lg:justify-end">
+                      {exp.skills.map((skill) => (
+                        <span
+                          key={skill}
+                          className="rounded-full border border-white/10 px-3 py-1 font-mono text-[10px] tracking-widest text-zinc-500 uppercase transition-colors hover:border-white/20 hover:text-zinc-300"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  </motion.div>
+                );
+              })}
             </motion.div>
-          );
-        })}
-      </div>
+          </AnimatePresence>
+        </div>
       </div>
 
       {/* Subtle background detail */}
